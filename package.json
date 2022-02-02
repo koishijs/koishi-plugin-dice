@@ -1,6 +1,6 @@
 {
   "name": "koishi-plugin-dice",
-  "version": "1.0.0-rc.0",
+  "version": "1.0.0",
   "description": "COC / DND Tools for Koishi",
   "main": "lib/index.js",
   "typings": "lib/index.d.ts",
@@ -31,9 +31,9 @@
     "dice"
   ],
   "peerDependencies": {
-    "koishi": "^4.0.0-rc.0"
+    "koishi": "^4.1.1"
   },
   "devDependencies": {
-    "@koishijs/plugin-mock": "^1.0.0-rc.0"
+    "@koishijs/plugin-mock": "^1.0.1"
   }
 }
