@@ -44,24 +44,37 @@ export const DiceSchema: Schema<DiceConfig> = Schema.object({
 
 export function onedice(ctx: Context, config: Config) {
   ctx.middleware((session, next) => {
-    const { content, prefix } = session.parsed
-    if (prefix === null || content[0] !== 'r') return next()
-    const expression = content.slice(1)
-    return session.execute({ name: 'roll', args: [expression] })
+    const { content, prefix, appel } = session.parsed
+    if (prefix === null && !appel) return next()
+    const res = /^(rh?|ww?|r?dx?)(.+)$/.exec(content)
+    if (!res) return next()
+    const [, type, expression] = res
+    return session.execute({
+      name: 'roll',
+      options: {
+        rh: type === 'rh'
+      },
+      args: [expression],
+    })
   })
 
-  ctx.command('roll [expression:rawtext]', '投掷')
+  ctx.platform('onebot').command('roll [expression:rawtext]', '投掷')
     .userFields(['name'])
-    .action(({ session }, raw) => {
+    .option('rh', '暗骰')
+    .action(async ({ session, options }, raw) => {
       const expression = (raw ? raw.trim() : raw) || 'd'
       try {
         const [value, root] = dice(expression.toLowerCase())
         const details = root.toString()
         const name = session.user.name || session.author.nickname || session.author.username
-        if (details.length > config.maxDetailsSize) {
-          return `${name} 投掷:\n${expression} = ${value}`
+        const message = details.length > config.maxDetailsSize
+          ? `${name} 投掷:\n${expression} = ${value}`
+          : `${name} 投掷:\n${expression} = ${details} = ${value}`
+        if (options.rh) {
+          await session.bot.sendPrivateMessage(session.userId, message)
+          return `${name} 投掷了暗骰。`
         } else {
-          return `${name} 投掷:\n${expression} = ${details} = ${value}`
+          return message
         }
       } catch (e) {
         if (e instanceof Error) {
