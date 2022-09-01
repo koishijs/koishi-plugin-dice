@@ -1,4 +1,4 @@
-import { Context, Schema } from 'koishi'
+import { Context, Schema, segment } from 'koishi'
 import { Config as OnediceConfig, dice } from '@onedice/core'
 import { Config } from '.'
 
@@ -46,30 +46,35 @@ export function onedice(ctx: Context, config: Config) {
   ctx.middleware((session, next) => {
     const { content, prefix, appel } = session.parsed
     if (prefix === null && !appel) return next()
-    const res = /^(rh?|ww?|r?dx?)(.+)$/.exec(content)
+    const res = /^(rh?|ww?|r?dx?)(.*)$/.exec(content)
     if (!res) return next()
-    const [, type, expression] = res
+    const [, type, raw] = res
+    const args = raw.trim().split(/\s+/)
+    if (args.length > 2) return next('表达式或原因中不可含有空格。')
     return session.execute({
       name: 'roll',
       options: {
         rh: type === 'rh'
       },
-      args: [expression],
+      args,
     })
   })
 
-  ctx.platform('onebot').command('roll [expression:rawtext]', '投掷')
+  ctx.command('roll [expression:string] [reason:string]', '投掷')
     .userFields(['name'])
     .option('rh', '暗骰')
-    .action(async ({ session, options }, raw) => {
-      const expression = (raw ? raw.trim() : raw) || 'd'
+    .action(async ({ session, options }, raw, reason) => {
+      const expression = (raw ? segment.unescape(raw.trim()) : raw) || 'd'
       try {
         const [value, root] = dice(expression.toLowerCase())
         const details = root.toString()
         const name = session.user.name || session.author.nickname || session.author.username
+        const left = reason
+          ? `${name} 因为 ${reason} 投掷:\n`
+          : `${name} 投掷:\n`
         const message = details.length > config.maxDetailsSize
-          ? `${name} 投掷:\n${expression} = ${value}`
-          : `${name} 投掷:\n${expression} = ${details} = ${value}`
+          ? `${left}${expression} = ${value}`
+          : `${left}${expression} = ${details} = ${value}`
         if (options.rh) {
           await session.bot.sendPrivateMessage(session.userId, message)
           return `${name} 投掷了暗骰。`
