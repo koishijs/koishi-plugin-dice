@@ -5,13 +5,15 @@ import { Config } from '.'
 export type DiceConfig = OnediceConfig & {
   inline: boolean
   maxDetailsSize: number
+  maxRollTimes: number
 }
 
 export const DiceSchema: Schema<DiceConfig> = Schema.object({
   random: Schema.function().description('随机数生成函数。'),
   maxRollCount: Schema.number().description('单次投掷最大投掷数量。').min(0).step(1),
-  inline: Schema.boolean().default(true),
+  maxRollTimes: Schema.number().description('最大重复投掷次数。').default(10),
   maxDetailsSize: Schema.number().description('过程展示最大字数，超过则省略过程。').default(500),
+  inline: Schema.boolean().default(true),
   d: Schema.object({
     a: Schema.number(),
     b: Schema.number(),
@@ -64,17 +66,30 @@ export function onedice(ctx: Context, config: Config) {
     .userFields(['name'])
     .option('rh', '暗骰')
     .action(async ({ session, options }, raw, reason) => {
-      const expression = (raw ? segment.unescape(raw.trim()) : raw) || 'd'
+      const expression = (raw ? segment.unescape(raw.trim()) : '') || 'd'
+      const splited = expression.split('#')
+      if (splited.length > 2) return '表达式错误。'
+      const times = splited.length === 2 ? +splited[0] : 1
+      const diceExpression = (splited.length === 2 ? splited[1] : splited[0]).toLowerCase()
+      if (!Number.isFinite(times) || times > config.maxRollTimes)
+        return '请输入正确的投掷次数。'
+      const name = session.user.name || session.author.nickname || session.author.username
+      const left = reason
+        ? `${name} 因为 ${reason} 投掷:\n`
+        : `${name} 投掷:\n`
       try {
-        const [value, root] = dice(expression.toLowerCase())
-        const details = root.toString()
-        const name = session.user.name || session.author.nickname || session.author.username
-        const left = reason
-          ? `${name} 因为 ${reason} 投掷:\n`
-          : `${name} 投掷:\n`
-        const message = details.length > config.maxDetailsSize
-          ? `${left}${expression} = ${value}`
-          : `${left}${expression} = ${details} = ${value}`
+        const dices = new Array(times).fill(0).map(_ => dice(diceExpression, config))
+        let message: string
+        if (times === 1) {
+          const [[value, root]] = dices
+          const details = root.toString()
+          message = details.length > config.maxDetailsSize
+            ? `${left}${expression} = ${value}`
+            : `${left}${expression} = ${details} = ${value}`
+        } else {
+          const results = dices.map(n => n[0]).join(', ')
+          message = `${left}${expression} = ${results}`
+        }
         if (options.rh) {
           await session.bot.sendPrivateMessage(session.userId, message)
           return `${name} 投掷了暗骰。`
