@@ -1,21 +1,14 @@
 import { Context, Schema } from 'koishi'
-import roll, { RollConfig } from './roll'
-
-declare module 'koishi' {
-  interface Modules {
-    dice: typeof import('.')
-  }
-}
+import { DiceConfig, DiceSchema, onedice } from './onedice'
 
 export const name = 'dice'
 
-export interface Config extends RollConfig {}
+export type Config = DiceConfig
 
-export const Config = Schema.object({
-  maxPoint: Schema.number().description('掷骰的最大点数。').default(1 << 16),
-  maxTimes: Schema.number().description('单次调用中最大掷骰次数。').default(64),
-})
+export const Config: Schema<Config> = Schema.intersect([
+  DiceSchema,
+])
 
-export function apply(ctx: Context, config: Config = {}) {
-  ctx.plugin(roll, config)
+export function apply(ctx: Context, config: Config) {
+  ctx.plugin(onedice, config)
 }
