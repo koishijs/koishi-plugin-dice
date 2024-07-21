@@ -10,7 +10,6 @@ export default function apply(ctx: Context, options: RollConfig = {}) {
   const regexp = /^((\d*)d)?(\d+)(\+((\d*)d)?(\d+))*$/i
 
   ctx.command('roll [expr]', '掷骰')
-    .userFields(['name', 'timers'])
     .shortcut('掷骰', { fuzzy: true })
     .example('roll 2d6+d10')
     .action(async ({ session }, message = '1d6') => {
@@ -64,9 +63,35 @@ export default function apply(ctx: Context, options: RollConfig = {}) {
     })
 
   ctx.middleware((session, next) => {
-    const { content, prefix } = session.parsed
-    if (!prefix || content[0] !== 'r') return next()
-    const expr = content.slice(1)
+    const elements = session.elements
+    const selfId = session.bot.selfId
+    const prefix: string | string[] = session.app.config.prefix.valueOf()
+
+    if (!elements || !elements.length) {
+      return next()
+    }
+    if (elements[0].type === 'at' && elements[0].attrs?.id === selfId) {
+      elements.shift()
+    }
+    if (elements[0].type !== 'text') {
+      return next()
+    }
+
+    let msg: string = elements[0].attrs.content.trim()
+    if (typeof prefix === 'string') {
+      if (msg.startsWith(prefix)) {
+        msg = msg.substring(prefix.length, msg.length)
+      }
+    } else if (Array.isArray(prefix)) {
+      for (const pre of prefix) {
+        if (msg.startsWith(pre)) {
+          msg = msg.substring(pre.length, msg.length)
+        }
+      }
+    }
+
+    if (msg[0] !== 'r') return next()
+    const expr = msg.slice(1).trim()
     if (!regexp.test(expr)) return next()
     return session.execute({ name: 'roll', args: [expr] })
   })
